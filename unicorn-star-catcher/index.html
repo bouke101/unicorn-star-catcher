@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🦄 Unicorn Star Catcher</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #06061a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
+      overflow: hidden;
+    }
+
+    #game-wrap {
+      position: relative;
+      width: 480px;
+      height: 700px;
+      background: linear-gradient(180deg, #06061a 0%, #12043a 50%, #1e0a52 100%);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 0 60px rgba(120, 40, 220, 0.6), 0 0 120px rgba(120, 40, 220, 0.2);
+    }
+
+    /* ── Background twinkle stars ── */
+    .bg-star {
+      position: absolute;
+      color: #fff;
+      pointer-events: none;
+      animation: twinkle var(--dur, 2s) infinite alternate;
+    }
+    @keyframes twinkle {
+      0%   { opacity: 0.2; transform: scale(0.8); }
+      100% { opacity: 1;   transform: scale(1.3); }
+    }
+
+    /* ── HUD ── */
+    #hud {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 22px;
+      background: rgba(0,0,0,0.35);
+      z-index: 10;
+    }
+    #score-display, #timer-display {
+      color: #fff;
+      font-size: 22px;
+      font-weight: bold;
+      text-shadow: 0 0 12px gold;
+    }
+    #timer-display.urgent {
+      color: #ff4040;
+      animation: pulse 0.4s infinite alternate;
+    }
+    @keyframes pulse {
+      from { transform: scale(1);    color: #ff4040; }
+      to   { transform: scale(1.25); color: #ff8080; }
+    }
+
+    /* ── Unicorn ── */
+    #unicorn {
+      position: absolute;
+      bottom: 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 5;
+      user-select: none;
+      pointer-events: none;
+    }
+    #unicorn-emoji { font-size: 58px; line-height: 1; filter: drop-shadow(0 0 10px #ff80ff); }
+    #basket        { font-size: 42px; line-height: 1; margin-top: -10px; }
+
+    /* ── Falling objects ── */
+    .obj {
+      position: absolute;
+      font-size: 38px;
+      z-index: 4;
+      pointer-events: none;
+      user-select: none;
+    }
+    .obj-poo {
+      animation: rainbowSpin 1.2s linear infinite;
+    }
+    @keyframes rainbowSpin {
+      0%   { filter: hue-rotate(0deg)   saturate(4) brightness(1.3); transform: rotate(0deg);   }
+      100% { filter: hue-rotate(360deg) saturate(4) brightness(1.3); transform: rotate(360deg); }
+    }
+
+    /* ── Score pop ── */
+    .score-pop {
+      position: absolute;
+      font-size: 26px;
+      font-weight: bold;
+      color: gold;
+      text-shadow: 0 0 8px gold;
+      z-index: 15;
+      pointer-events: none;
+      animation: popUp 0.9s ease-out forwards;
+    }
+    @keyframes popUp {
+      0%   { opacity: 1; transform: translateY(0)    scale(1);   }
+      100% { opacity: 0; transform: translateY(-70px) scale(1.6); }
+    }
+
+    /* ── Flash on poo catch ── */
+    @keyframes redFlash {
+      0%, 100% { background: transparent; }
+      50%       { background: rgba(255,0,0,0.35); }
+    }
+    .flash { animation: redFlash 0.25s ease-out; }
+
+    /* ── Screens ── */
+    .screen {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 20;
+      background: rgba(6,6,26,0.92);
+      text-align: center;
+      padding: 32px;
+      gap: 10px;
+    }
+    .screen.hidden { display: none; }
+
+    .big-emoji { font-size: 88px; }
+
+    .screen h1 {
+      font-size: 34px;
+      color: gold;
+      text-shadow: 0 0 20px rgba(255,215,0,0.9);
+    }
+    .screen h2 {
+      font-size: 28px;
+      color: #ff80ff;
+      text-shadow: 0 0 14px #ff40ff;
+    }
+    .screen p  { color: #ccd; font-size: 18px; line-height: 1.6; }
+    .screen small { color: #889; font-size: 14px; }
+
+    #final-score {
+      font-size: 52px;
+      color: gold;
+      text-shadow: 0 0 22px rgba(255,215,0,1);
+    }
+
+    .btn {
+      background: linear-gradient(135deg, #e040fb, #7b1fa2);
+      color: #fff;
+      border: none;
+      padding: 15px 44px;
+      font-size: 22px;
+      font-family: inherit;
+      border-radius: 50px;
+      cursor: pointer;
+      margin-top: 10px;
+      box-shadow: 0 4px 22px rgba(224,64,251,0.55);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .btn:hover  { transform: scale(1.06); box-shadow: 0 6px 28px rgba(224,64,251,0.75); }
+    .btn:active { transform: scale(0.96); }
+
+    /* ── Mobile touch buttons ── */
+    #mobile-ctrl {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 90px;
+      display: none;
+      z-index: 8;
+    }
+    .ctrl-btn {
+      position: absolute;
+      bottom: 8px;
+      width: 44%;
+      height: 72px;
+      background: rgba(255,255,255,0.08);
+      border: 2px solid rgba(255,255,255,0.18);
+      border-radius: 14px;
+      font-size: 32px;
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #ctrl-left  { left: 8px; }
+    #ctrl-right { right: 8px; }
+
+    @media (max-width: 500px) {
+      #game-wrap { width: 100vw; height: 100dvh; border-radius: 0; }
+      #mobile-ctrl { display: flex; }
+    }
+  </style>
+</head>
+<body>
+<div id="game-wrap">
+
+  <div id="bg-stars"></div>
+
+  <div id="hud" class="hidden">
+    <div id="score-display">⭐ 0</div>
+    <div id="timer-display">⏱ 30</div>
+  </div>
+
+  <div id="unicorn" class="hidden">
+    <div id="unicorn-emoji">🦄</div>
+    <div id="basket">🧺</div>
+  </div>
+
+  <!-- Start screen -->
+  <div id="screen-start" class="screen">
+    <div class="big-emoji">🦄</div>
+    <h1>Unicorn Star Catcher</h1>
+    <p>Catch the falling stars ⭐ with your basket!</p>
+    <p>Avoid the spinning rainbow poo 🌈💩<br><strong>— one touch = game over!</strong></p>
+    <small>← → Arrow keys &nbsp;|&nbsp; A / D &nbsp;|&nbsp; 30 seconds</small>
+    <button class="btn" id="btn-start">✨ Let's Play! ✨</button>
+  </div>
+
+  <!-- Game-over screen -->
+  <div id="screen-over" class="screen hidden">
+    <div id="over-emoji" class="big-emoji">⭐</div>
+    <h2 id="over-title"></h2>
+    <p  id="over-msg"></p>
+    <div id="final-score"></div>
+    <button class="btn" id="btn-replay">🦄 Play Again!</button>
+  </div>
+
+  <!-- Mobile controls -->
+  <div id="mobile-ctrl">
+    <button class="ctrl-btn" id="ctrl-left">◀</button>
+    <button class="ctrl-btn" id="ctrl-right">▶</button>
+  </div>
+
+</div>
+
+<script>
+// ─── Constants ──────────────────────────────────────────────────────────────
+const W = 480, H = 700;
+const DURATION   = 30;       // seconds
+const UNI_SPEED  = 6;        // px / frame
+const UNI_W      = 72;       // basket collision half-width (total)
+const BASKET_Y   = H - 18 - 50;  // approx y of basket top (from container top)
+const BASE_SPEED = 3.5;      // fall px/frame at t=0
+const MAX_SPEED  = 7.5;      // fall px/frame at t=30s
+const STAR_BASE_MS  = 850;   // base ms between star spawns
+const STAR_VAR_MS   = 600;   // variance
+const POO_BASE_MS   = 5500;  // base ms between poo spawns
+const POO_VAR_MS    = 2500;  // variance
+
+// ─── State ──────────────────────────────────────────────────────────────────
+let score, running, unicornX, keys, objects;
+let startTime, nextStarAt, nextPooAt, raf;
+
+function initState() {
+  score     = 0;
+  running   = false;
+  unicornX  = W / 2;
+  keys      = { left: false, right: false };
+  objects   = [];
+  startTime = 0;
+  raf       = null;
+}
+
+// ─── DOM ────────────────────────────────────────────────────────────────────
+const wrap        = document.getElementById('game-wrap');
+const unicornEl   = document.getElementById('unicorn');
+const hud         = document.getElementById('hud');
+const scoreDom    = document.getElementById('score-display');
+const timerDom    = document.getElementById('timer-display');
+const screenStart = document.getElementById('screen-start');
+const screenOver  = document.getElementById('screen-over');
+const overEmoji   = document.getElementById('over-emoji');
+const overTitle   = document.getElementById('over-title');
+const overMsg     = document.getElementById('over-msg');
+const finalDom    = document.getElementById('final-score');
+
+// ─── Background stars ────────────────────────────────────────────────────────
+(function makeBgStars() {
+  const c = document.getElementById('bg-stars');
+  for (let i = 0; i < 55; i++) {
+    const s = document.createElement('div');
+    s.className = 'bg-star';
+    s.textContent = Math.random() > 0.5 ? '✦' : '·';
+    s.style.left   = (Math.random() * 100) + '%';
+    s.style.top    = (Math.random() * 100) + '%';
+    s.style.fontSize = (3 + Math.random() * 9) + 'px';
+    s.style.setProperty('--dur', (1.2 + Math.random() * 2.5) + 's');
+    s.style.animationDelay = (Math.random() * 3) + 's';
+    c.appendChild(s);
+  }
+})();
+
+// ─── Input ──────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A') keys.left  = true;
+  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
+});
+document.addEventListener('keyup', e => {
+  if (e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A') keys.left  = false;
+  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
+});
+
+const ctrlL = document.getElementById('ctrl-left');
+const ctrlR = document.getElementById('ctrl-right');
+ctrlL.addEventListener('touchstart', e => { e.preventDefault(); keys.left  = true;  }, { passive: false });
+ctrlL.addEventListener('touchend',   e => { e.preventDefault(); keys.left  = false; }, { passive: false });
+ctrlR.addEventListener('touchstart', e => { e.preventDefault(); keys.right = true;  }, { passive: false });
+ctrlR.addEventListener('touchend',   e => { e.preventDefault(); keys.right = false; }, { passive: false });
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function rand(min, max) { return min + Math.random() * (max - min); }
+
+function fallSpeed(elapsed) {
+  const t = Math.min(elapsed / DURATION, 1);
+  return BASE_SPEED + (MAX_SPEED - BASE_SPEED) * t;
+}
+
+function scheduleNextStar(now, elapsed) {
+  const progress = Math.min(elapsed / DURATION, 1);
+  const interval = STAR_BASE_MS * (1 - progress * 0.45) + rand(0, STAR_VAR_MS);
+  nextStarAt = now + interval;
+}
+
+function scheduleNextPoo(now) {
+  nextPooAt = now + POO_BASE_MS + rand(0, POO_VAR_MS);
+}
+
+// ─── Spawn ───────────────────────────────────────────────────────────────────
+function spawnObj(type) {
+  const x  = rand(10, W - 60);
+  const el = document.createElement('div');
+  el.className = 'obj' + (type === 'poo' ? ' obj-poo' : '');
+  el.textContent = type === 'star' ? (Math.random() > 0.35 ? '⭐' : '✨') : '💩';
+  el.style.left = x + 'px';
+  el.style.top  = '-50px';
+  wrap.appendChild(el);
+  objects.push({ type, x, y: -50, el });
+}
+
+// ─── Collision ───────────────────────────────────────────────────────────────
+function hits(obj) {
+  const cx = obj.x + 19;          // center of 38px emoji
+  const ob = obj.y + 36;          // bottom of emoji
+  const bl = unicornX - UNI_W / 2;
+  const br = unicornX + UNI_W / 2;
+  return ob >= BASKET_Y && obj.y < H && cx >= bl && cx <= br;
+}
+
+// ─── Score pop ───────────────────────────────────────────────────────────────
+function scorePop(x, y) {
+  const d = document.createElement('div');
+  d.className = 'score-pop';
+  d.textContent = '+1 ⭐';
+  d.style.left = (x - 10) + 'px';
+  d.style.top  = (y - 10) + 'px';
+  wrap.appendChild(d);
+  setTimeout(() => d.remove(), 900);
+}
+
+// ─── Game loop ────────────────────────────────────────────────────────────────
+function loop(ts) {
+  if (!running) return;
+
+  const elapsed  = (ts - startTime) / 1000;
+  const timeLeft = Math.max(0, DURATION - elapsed);
+
+  // Timer up
+  if (timeLeft <= 0) { endGame(false); return; }
+
+  // Move unicorn
+  if (keys.left)  unicornX = Math.max(38,     unicornX - UNI_SPEED);
+  if (keys.right) unicornX = Math.min(W - 38, unicornX + UNI_SPEED);
+  unicornEl.style.left = (unicornX - 40) + 'px';
+
+  // Spawn
+  if (ts >= nextStarAt) { spawnObj('star'); scheduleNextStar(ts, elapsed); }
+  if (ts >= nextPooAt)  { spawnObj('poo');  scheduleNextPoo(ts); }
+
+  // Update objects
+  const speed  = fallSpeed(elapsed);
+  const remove = [];
+
+  for (const obj of objects) {
+    obj.y += speed;
+    obj.el.style.top = obj.y + 'px';
+
+    if (hits(obj)) {
+      remove.push(obj);
+      if (obj.type === 'star') {
+        score++;
+        scorePop(obj.x, obj.y);
+      } else {
+        obj.el.remove();
+        objects = objects.filter(o => o !== obj);
+        endGame(true);
+        return;
+      }
+    } else if (obj.y > H + 20) {
+      remove.push(obj);
+    }
+  }
+
+  for (const obj of remove) {
+    obj.el.remove();
+    objects = objects.filter(o => o !== obj);
+  }
+
+  // HUD
+  scoreDom.textContent = '⭐ ' + score;
+  const tc = Math.ceil(timeLeft);
+  timerDom.textContent = '⏱ ' + tc;
+  timerDom.classList.toggle('urgent', tc <= 5);
+
+  raf = requestAnimationFrame(loop);
+}
+
+// ─── Start / End ─────────────────────────────────────────────────────────────
+function startGame() {
+  initState();
+  document.querySelectorAll('.obj').forEach(e => e.remove());
+
+  screenStart.classList.add('hidden');
+  screenOver.classList.add('hidden');
+  hud.classList.remove('hidden');
+  unicornEl.classList.remove('hidden');
+
+  unicornEl.style.left = (unicornX - 40) + 'px';
+
+  running   = true;
+  startTime = performance.now();
+
+  scheduleNextStar(startTime - 600, 0); // first star spawns quickly
+  scheduleNextPoo(startTime);
+
+  raf = requestAnimationFrame(loop);
+}
+
+function endGame(poo) {
+  running = false;
+  cancelAnimationFrame(raf);
+  document.querySelectorAll('.obj').forEach(e => e.remove());
+  objects = [];
+
+  hud.classList.add('hidden');
+  unicornEl.classList.add('hidden');
+
+  if (poo) {
+    wrap.classList.add('flash');
+    setTimeout(() => wrap.classList.remove('flash'), 300);
+    overEmoji.textContent = '🌈💩';
+    overTitle.textContent = 'Oh no!!';
+    overMsg.textContent   = 'You caught the rainbow poo! 😱💀';
+  } else {
+    overEmoji.textContent = score >= 20 ? '🏆' : score >= 10 ? '🌟' : '⏱';
+    overTitle.textContent = 'Time\'s up! 🌟';
+    overMsg.textContent   = 'You collected:';
+  }
+
+  finalDom.textContent = score + (score === 1 ? ' star ⭐' : ' stars ⭐');
+  screenOver.classList.remove('hidden');
+}
+
+// ─── Buttons ─────────────────────────────────────────────────────────────────
+document.getElementById('btn-start').addEventListener('click', startGame);
+document.getElementById('btn-replay').addEventListener('click', startGame);
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+initState();
+</script>
+</body>
+</html>
