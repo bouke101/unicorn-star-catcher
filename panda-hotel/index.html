@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panda Hotel</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0d1b3d;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
+      overflow: hidden;
+    }
+
+    #game-wrap {
+      position: relative;
+      width: min(480px, 100vw);
+      height: min(760px, 100dvh);
+      background: #fff;
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 0 60px rgba(80, 160, 255, 0.5);
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* ── HUD ── */
+    #hud {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.82);
+      z-index: 10;
+      font-size: 16px;
+      font-weight: bold;
+      color: #1b2a4a;
+    }
+    #hud .stat { white-space: nowrap; }
+    #btn-build {
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: bold;
+      padding: 6px 12px;
+      border: none;
+      border-radius: 20px;
+      background: #ffd43b;
+      color: #1b2a4a;
+      box-shadow: 0 3px 0 #e67700;
+      cursor: pointer;
+    }
+    #btn-build.ready { animation: pulse 1s infinite; }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.12); }
+    }
+
+    /* ── City scene ── */
+    #scene {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+      background: linear-gradient(180deg, #7cc8ff 0%, #b9e3ff 60%, #e6f6ff 100%);
+    }
+    .cloud {
+      position: absolute;
+      font-size: 46px;
+      opacity: 0.9;
+      animation: drift linear infinite;
+    }
+    @keyframes drift {
+      from { transform: translateX(-80px); }
+      to   { transform: translateX(560px); }
+    }
+    .sun { position: absolute; top: 52px; right: 20px; font-size: 50px; }
+
+    #world {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 100%;
+      transition: transform 0.6s ease;
+    }
+
+    .bg-building {
+      position: absolute;
+      bottom: 46px;
+      border-radius: 4px 4px 0 0;
+      background-image: radial-gradient(circle, #ffe9a8 2.5px, transparent 3px);
+      background-size: 14px 16px;
+      background-position: 4px 6px;
+      opacity: 0.85;
+    }
+
+    #ground {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 46px;
+      background: linear-gradient(180deg, #5cb85c 0 10px, #6b6f7a 10px 100%);
+    }
+    #ground::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0; top: 26px;
+      height: 4px;
+      background: repeating-linear-gradient(90deg, #fff 0 22px, transparent 22px 44px);
+      opacity: 0.8;
+    }
+    .extra {
+      position: absolute;
+      bottom: 38px;
+      font-size: 34px;
+      line-height: 1;
+      animation: pop-in 0.5s cubic-bezier(.3,1.6,.5,1);
+    }
+    @keyframes pop-in {
+      from { transform: scale(0); }
+      to   { transform: scale(1); }
+    }
+
+    /* The hotel */
+    #hotel {
+      position: absolute;
+      bottom: 46px;
+      left: 50%;
+      width: 196px;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column-reverse;
+      align-items: center;
+    }
+    .floor {
+      position: relative;
+      width: 196px;
+      height: 42px;
+      background: #f3d9b1;
+      border-left: 6px solid #c99a5b;
+      border-right: 6px solid #c99a5b;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      animation: drop-in 0.5s cubic-bezier(.3,1.6,.5,1);
+    }
+    .floor:nth-child(even) { background: #f7e3c4; }
+    .floor .num {
+      position: absolute;
+      left: -30px;
+      font-size: 12px;
+      color: #1b2a4a;
+      background: rgba(255,255,255,0.85);
+      padding: 0 5px;
+      border-radius: 6px;
+    }
+    .room {
+      width: 34px; height: 30px;
+      background: #9ec5e8;
+      border: 3px solid #8a6a3d;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 19px;
+      line-height: 1;
+    }
+    .room.busy { background: #ffe8a3; }
+    .room.new { animation: pop-in 0.4s; }
+    .lobby {
+      height: 66px;
+      align-items: flex-end;
+      background: #c0392b !important;
+      animation: none;
+    }
+    .lobby .sign {
+      position: absolute;
+      top: 5px;
+      background: #1b2a4a;
+      color: #ffd43b;
+      font-size: 12px;
+      padding: 1px 8px;
+      border-radius: 8px;
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+    .lobby .door {
+      width: 40px; height: 36px;
+      background: #ffe8a3;
+      border: 3px solid #8a6a3d;
+      border-bottom: none;
+      border-radius: 20px 20px 0 0;
+    }
+    .roof {
+      width: 216px;
+      height: 14px;
+      background: #8a6a3d;
+      border-radius: 6px 6px 0 0;
+      position: relative;
+    }
+    .roof-items {
+      position: absolute;
+      bottom: 12px;
+      left: 0; right: 0;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 8px;
+      font-size: 28px;
+      line-height: 1;
+    }
+    @keyframes drop-in {
+      from { transform: translateY(-120px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+
+    #panda {
+      position: absolute;
+      bottom: 40px;
+      left: calc(50% + 102px);
+      font-size: 46px;
+      line-height: 1;
+      z-index: 5;
+    }
+    #panda::after {             /* manager's bow tie */
+      content: '🎀';
+      position: absolute;
+      left: 12px; top: 36px;
+      font-size: 18px;
+    }
+    #panda.happy { animation: hop 0.5s; }
+    @keyframes hop {
+      0%, 100% { transform: translateY(0); }
+      40% { transform: translateY(-24px) rotate(-10deg); }
+    }
+    #guest {
+      position: absolute;
+      bottom: 42px;
+      right: 10px;
+      font-size: 40px;
+      line-height: 1;
+      z-index: 5;
+      transition: right 0.7s ease, opacity 0.4s;
+    }
+    #guest.arrive { right: max(0px, calc(50% - 200px)); }
+    #guest.leave { right: -60px; opacity: 0; }
+    #guest.checkin { right: calc(50% - 20px); opacity: 0; transition: right 0.9s ease, opacity 0.9s; }
+
+    .float-coins {
+      position: absolute;
+      left: calc(50% + 100px);
+      bottom: 100px;
+      font-size: 22px;
+      font-weight: bold;
+      color: #e67700;
+      text-shadow: 0 2px 0 #fff;
+      z-index: 7;
+      animation: float-up 1.2s forwards;
+      pointer-events: none;
+    }
+    @keyframes float-up {
+      from { transform: translateY(0); opacity: 1; }
+      to   { transform: translateY(-70px); opacity: 0; }
+    }
+
+    #toast {
+      position: absolute;
+      top: 56px; left: 12px; right: 12px;
+      background: #1b2a4a;
+      color: #fff;
+      font-size: 16px;
+      padding: 10px 14px;
+      border-radius: 14px;
+      text-align: center;
+      z-index: 9;
+      transition: opacity 0.4s, transform 0.4s;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    #toast.hidden { opacity: 0; transform: translateY(-20px); pointer-events: none; }
+    #toast b { color: #ffd43b; }
+
+    /* ── Front desk panel ── */
+    #panel {
+      background: #1b2a4a;
+      padding: 12px 16px 16px;
+      color: #fff;
+      text-align: center;
+    }
+    #story {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      text-align: left;
+      font-size: 16px;
+      line-height: 1.35;
+      min-height: 46px;
+      margin-bottom: 6px;
+    }
+    #story-face { font-size: 34px; line-height: 1; }
+    #story-text { flex: 1; min-width: 0; }
+    #patience {
+      height: 8px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 6px;
+      visibility: hidden;
+    }
+    #patience.on { visibility: visible; }
+    #patience-bar {
+      height: 100%;
+      width: 100%;
+      background: #69db7c;
+      border-radius: 4px;
+    }
+    #question {
+      font-size: 40px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      line-height: 1.2;
+    }
+    #question .q { color: #ffd43b; }
+    #question .typed {
+      display: inline-block;
+      min-width: 1.6em;
+      border-bottom: 4px solid #ffd43b;
+      color: #ffd43b;
+    }
+    #feedback {
+      height: 22px;
+      font-size: 16px;
+      margin: 2px 0 8px;
+    }
+    #feedback.good { color: #8ce99a; }
+    #feedback.bad  { color: #ffa8a8; }
+
+    #answers {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    #answers.pad { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .ans {
+      font-family: inherit;
+      font-size: 28px;
+      font-weight: bold;
+      padding: 10px 0;
+      border: none;
+      border-radius: 14px;
+      color: #1b2a4a;
+      background: linear-gradient(180deg, #b2f2bb, #69db7c);
+      box-shadow: 0 5px 0 #2f9e44;
+      cursor: pointer;
+    }
+    #answers.pad .ans { font-size: 24px; padding: 8px 0; }
+    .ans:active { transform: translateY(3px); box-shadow: 0 2px 0 #2f9e44; }
+    .ans:disabled { cursor: default; }
+    .ans.ok { background: linear-gradient(180deg, #ffe066, #fcc419); box-shadow: 0 5px 0 #e67700; }
+    .ans.del { background: linear-gradient(180deg, #ffc9c9, #ff8787); box-shadow: 0 5px 0 #c92a2a; }
+    .ans.right { background: linear-gradient(180deg, #ffe066, #fcc419); box-shadow: 0 5px 0 #e67700; }
+    .ans.wrong { background: linear-gradient(180deg, #ffc9c9, #ff8787); box-shadow: 0 5px 0 #c92a2a; }
+    .ans .key { font-size: 12px; opacity: 0.55; margin-right: 6px; vertical-align: middle; }
+
+    /* ── Overlay screens ── */
+    .screen {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 24px 18px;
+      background: rgba(13, 27, 61, 0.94);
+      z-index: 20;
+      text-align: center;
+      color: #fff;
+      overflow-y: auto;
+    }
+    .screen.hidden { display: none; }
+    .screen h1 { font-size: 38px; color: #ffd43b; text-shadow: 0 3px 0 #e67700; }
+    .screen h2 { font-size: 28px; color: #ffd43b; }
+    .screen p  { color: #dde; font-size: 16px; line-height: 1.5; max-width: 380px; }
+    .big-emoji { font-size: 64px; }
+
+    .btn {
+      font-family: inherit;
+      font-size: 22px;
+      font-weight: bold;
+      padding: 12px 28px;
+      border: none;
+      border-radius: 40px;
+      background: linear-gradient(135deg, #ff8787, #f06595);
+      color: #fff;
+      box-shadow: 0 5px 0 #a61e4d;
+      cursor: pointer;
+    }
+    .btn.alt { background: linear-gradient(135deg, #74c0fc, #4dabf7); box-shadow: 0 5px 0 #1864ab; }
+    .btn.small { font-size: 15px; padding: 8px 18px; }
+    .btn:active { transform: translateY(3px); }
+    .link-btn {
+      font-family: inherit;
+      background: none;
+      border: none;
+      color: #99a;
+      font-size: 14px;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    #shop-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+      max-width: 380px;
+    }
+    .shop-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 14px;
+      padding: 8px 12px;
+      text-align: left;
+    }
+    .shop-item .icon { font-size: 32px; }
+    .shop-item .info { flex: 1; min-width: 0; font-size: 15px; }
+    .shop-item .info small { display: block; color: #aab; font-size: 12px; }
+    .shop-item button {
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: bold;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 12px;
+      background: #ffd43b;
+      color: #1b2a4a;
+      box-shadow: 0 3px 0 #e67700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .shop-item button:disabled {
+      background: #556;
+      color: #99a;
+      box-shadow: none;
+      cursor: default;
+    }
+    .shop-item.owned { opacity: 0.55; }
+  </style>
+</head>
+<body>
+<div id="game-wrap">
+
+  <div id="hud">
+    <span class="stat" id="hud-coins">🪙 0</span>
+    <span class="stat" id="hud-rooms">🛏️ 0/4</span>
+    <span class="stat" id="hud-level">⭐ Lv 1</span>
+    <button id="btn-build">🔨 Build</button>
+  </div>
+
+  <div id="scene">
+    <div class="sun">☀️</div>
+    <div class="cloud" style="top:70px; animation-duration:38s; animation-delay:-10s">☁️</div>
+    <div class="cloud" style="top:130px; animation-duration:52s; animation-delay:-30s; font-size:34px">☁️</div>
+    <div id="world">
+      <div id="skyline"></div>
+      <div id="ground"></div>
+      <div id="extras"></div>
+      <div id="hotel"></div>
+      <div id="panda">🐼</div>
+      <div id="guest"></div>
+    </div>
+    <div id="toast" class="hidden"></div>
+  </div>
+
+  <div id="panel">
+    <div id="story"><span id="story-face">🐰</span><span id="story-text"></span></div>
+    <div id="patience"><div id="patience-bar"></div></div>
+    <div id="question"></div>
+    <div id="feedback"></div>
+    <div id="answers"></div>
+  </div>
+
+  <!-- Start screen -->
+  <div id="screen-start" class="screen">
+    <div class="big-emoji">🐼🏨</div>
+    <h1>Panda Hotel</h1>
+    <p>You are Panda, the manager of a small hotel in the big city.
+       Guests come to the front desk with a sum. Get it right and they pay you! 🪙</p>
+    <p>Use your coins to build new floors with more rooms, a pool, a restaurant and more.
+       The bigger your hotel, the harder the sums get!</p>
+    <button class="btn" id="btn-play">🛎️ Open the hotel</button>
+    <button class="link-btn" id="btn-reset" hidden>Start a brand new hotel</button>
+  </div>
+
+  <!-- Build shop -->
+  <div id="screen-shop" class="screen hidden">
+    <h2>🔨 Build</h2>
+    <p id="shop-coins"></p>
+    <div id="shop-list"></div>
+    <button class="btn alt small" id="btn-close-shop">Back to the desk</button>
+  </div>
+</div>
+
+<script>
+const ROOMS_PER_FLOOR = 4;
+const FLOOR_H = 42;
+const LOBBY_H = 66;
+const GROUND_H = 46;
+const SAVE_KEY = 'panda-hotel-save';
+
+// Each level is unlocked by building a floor. Later levels add harder
+// tables, a patience timer, and typing the answer instead of choosing it.
+const LEVELS = [
+  null,
+  { tables: [1, 2, 10],                    mode: 'choice', time: 0 },
+  { tables: [1, 2, 5, 10],                 mode: 'choice', time: 0 },
+  { tables: [1, 2, 3, 4, 5, 10],           mode: 'choice', time: 30 },
+  { tables: [1, 2, 3, 4, 5, 6, 10],        mode: 'choice', time: 25 },
+  { tables: [1, 2, 3, 4, 5, 6, 7, 10],     mode: 'type',   time: 30 },
+  { tables: [1, 2, 3, 4, 5, 6, 7, 8, 10],  mode: 'type',   time: 25 },
+  { tables: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], mode: 'type', time: 22 },
+];
+function levelInfo(level) {
+  if (level < LEVELS.length) return LEVELS[level];
+  // Beyond the last level the guests just keep getting more impatient.
+  return { tables: LEVELS[LEVELS.length - 1].tables, mode: 'type',
+           time: Math.max(8, 22 - (level - LEVELS.length + 1) * 2) };
+}
+
+const UPGRADES = [
+  { id: 'garden',     icon: '🎋', name: 'Bamboo garden',     cost: 60,  place: 'roof' },
+  { id: 'restaurant', icon: '🍜', name: 'Noodle restaurant', cost: 100, place: 'left' },
+  { id: 'pool',       icon: '🏊', name: 'Swimming pool',     cost: 150, place: 'right' },
+  { id: 'taxi',       icon: '🚕', name: 'Hotel taxi',        cost: 200, place: 'right' },
+  { id: 'fountain',   icon: '⛲', name: 'Fountain',          cost: 260, place: 'left' },
+  { id: 'heli',       icon: '🚁', name: 'Helipad',           cost: 400, place: 'roof' },
+];
+
+const GUESTS = [
+  ['🐰', 'rabbit', 'rabbits'], ['🦊', 'fox', 'foxes'], ['🐨', 'koala', 'koalas'],
+  ['🐸', 'frog', 'frogs'], ['🐵', 'monkey', 'monkeys'], ['🐯', 'tiger', 'tigers'],
+  ['🐷', 'pig', 'pigs'], ['🐻', 'bear', 'bears'], ['🦁', 'lion', 'lions'],
+  ['🐧', 'penguin', 'penguins'], ['🦒', 'giraffe', 'giraffes'], ['🐘', 'elephant', 'elephants'],
+];
+
+function pl(n, one, many) { return `${n} ${n === 1 ? one : many}`; }
+
+// Hotel situations. Each one asks for a × b.
+const STORIES = [
+  (a, b, g) => `${a === 1 ? `I am a ${g[1]}` : `We are ${a} ${g[2]}`}. Each of us needs ${pl(b, 'towel', 'towels')}. How many towels?`,
+  (a, b) => `Our room costs ${pl(a, 'coin', 'coins')} a night. We stay ${pl(b, 'night', 'nights')}. How much do we pay?`,
+  (a, b) => `We need ${pl(a, 'room', 'rooms')} with ${pl(b, 'bed', 'beds')} in each. How many beds is that?`,
+  (a, b) => `${pl(a, 'bus is', 'buses are')} coming, with ${pl(b, 'guest', 'guests')} in each bus. How many guests?`,
+  (a, b) => `Breakfast for ${pl(a, 'table', 'tables')}, with ${pl(b, 'pancake', 'pancakes')} per table. How many pancakes?`,
+  (a, b, g) => `${a === 1 ? `One ${g[1]} wants` : `${a} ${g[2]} want`} ${pl(b, 'bamboo stick', 'bamboo sticks')} each. How many for the kitchen?`,
+  (a, b) => `Please clean ${pl(a, 'floor', 'floors')} with ${pl(b, 'window', 'windows')} each. How many windows?`,
+  (a, b) => `We play ${pl(a, 'game', 'games')} of minigolf with ${pl(b, 'ball', 'balls')} each. How many balls?`,
+];
+
+const CHEERS = ['Thank you, manager! 🎉', 'Perfect! ⭐', 'Great service! 🛎️', 'Brilliant! 🐼',
+                'Wonderful hotel! 🏨', 'Well done! 👏'];
+
+const $ = id => document.getElementById(id);
+const sceneEl = $('scene'), worldEl = $('world'), hotelEl = $('hotel'), extrasEl = $('extras');
+const pandaEl = $('panda'), guestEl = $('guest'), toastEl = $('toast');
+const storyFace = $('story-face'), storyText = $('story-text');
+const patienceEl = $('patience'), patienceBar = $('patience-bar');
+const questionEl = $('question'), feedbackEl = $('feedback'), answersEl = $('answers');
+const screenStart = $('screen-start'), screenShop = $('screen-shop');
+
+let state = freshState();
+let current = null;     // { a, b, guest, startedAt }
+let typed = '';
+let locked = true;
+let streak = 0;
+let retry = [];         // sums answered wrong: { a, b, wait }
+let timeLeft = 0;
+let timerId = null;
+
+function freshState() {
+  return { coins: 0, floors: 1, served: 0, upgrades: [], rooms: [] };
+}
+
+// ── Saving ──
+function save() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch {}
+}
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SAVE_KEY));
+    if (s && s.floors >= 1) return { ...freshState(), ...s };
+  } catch {}
+  return null;
+}
+
+// ── Sound effects ──
+let audio = null;
+function tone(freq, start, dur, type = 'sine') {
+  if (!audio) return;
+  const osc = audio.createOscillator();
+  const gain = audio.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.16, audio.currentTime + start);
+  gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + start + dur);
+  osc.connect(gain).connect(audio.destination);
+  osc.start(audio.currentTime + start);
+  osc.stop(audio.currentTime + start + dur);
+}
+const playRight = () => { tone(660, 0, 0.12); tone(880, 0.1, 0.18); };
+const playWrong = () => { tone(220, 0, 0.25, 'triangle'); tone(180, 0.15, 0.3, 'triangle'); };
+const playBuild = () => [392, 523, 659, 784].forEach((f, i) => tone(f, i * 0.1, 0.2));
+const playBell  = () => tone(1320, 0, 0.4);
+
+// ── Scenery ──
+function buildSkyline() {
+  const colors = ['#5f6b8a', '#4a5578', '#6d7a99', '#3f4a6b', '#7a86a6'];
+  const spots = [[0, 54, 230], [46, 40, 320], [380, 48, 280], [424, 56, 210]];
+  spots.forEach(([left, width, height], i) => {
+    const b = document.createElement('div');
+    b.className = 'bg-building';
+    b.style.left = (left / 480 * 100) + '%';
+    b.style.width = width + 'px';
+    b.style.height = height + 'px';
+    b.style.backgroundColor = colors[i % colors.length];
+    $('skyline').appendChild(b);
+  });
+}
+
+function totalRooms() { return state.floors * ROOMS_PER_FLOOR; }
+
+function drawHotel() {
+  hotelEl.innerHTML = '';
+  const lobby = document.createElement('div');
+  lobby.className = 'floor lobby';
+  lobby.innerHTML = `<span class="sign">🐼 PANDA HOTEL ${'★'.repeat(hotelStars())}</span>` +
+                    `<span class="door"></span>`;
+  hotelEl.appendChild(lobby);
+  for (let f = 0; f < state.floors; f++) addFloorEl(f, false);
+  const roof = document.createElement('div');
+  roof.className = 'roof';
+  roof.id = 'roof';
+  hotelEl.appendChild(roof);
+  drawExtras();
+  placeCamera();
+  updateHud();
+}
+
+function addFloorEl(f, animate) {
+  const floor = document.createElement('div');
+  floor.className = 'floor';
+  if (!animate) floor.style.animation = 'none';
+  floor.innerHTML = `<span class="num">${f + 1}</span>`;
+  for (let r = 0; r < ROOMS_PER_FLOOR; r++) {
+    const room = document.createElement('span');
+    const idx = f * ROOMS_PER_FLOOR + r;
+    room.className = 'room';
+    room.id = 'room-' + idx;
+    if (state.rooms[idx]) { room.classList.add('busy'); room.textContent = state.rooms[idx]; }
+    floor.appendChild(room);
+  }
+  // Floors go below the roof.
+  const roof = $('roof');
+  roof ? hotelEl.insertBefore(floor, roof) : hotelEl.appendChild(floor);
+}
+
+function drawExtras() {
+  extrasEl.innerHTML = '';
+  const roofItems = [];
+  let left = 0, right = 0;
+  for (const u of UPGRADES) {
+    if (!state.upgrades.includes(u.id)) continue;
+    if (u.place === 'roof') { roofItems.push(u.icon); continue; }
+    const el = document.createElement('div');
+    el.className = 'extra';
+    el.textContent = u.icon;
+    if (u.place === 'left') el.style.left = `${4 + left++ * 40}px`;
+    else el.style.right = `${4 + right++ * 40}px`;
+    extrasEl.appendChild(el);
+  }
+  const roof = $('roof');
+  if (roof) roof.innerHTML = `<div class="roof-items"><span>${roofItems[0] || ''}</span><span>${roofItems[1] || ''}</span></div>`;
+}
+
+function hotelStars() { return Math.min(5, 1 + state.upgrades.length); }
+
+function placeCamera() {
+  const top = GROUND_H + LOBBY_H + state.floors * FLOOR_H + 50;
+  const room = sceneEl.clientHeight - 60;
+  worldEl.style.transform = `translateY(${Math.max(0, top - room)}px)`;
+}
+
+function updateHud() {
+  const busy = state.rooms.filter(Boolean).length;
+  $('hud-coins').textContent = `🪙 ${state.coins}`;
+  $('hud-rooms').textContent = `🛏️ ${busy}/${totalRooms()}`;
+  $('hud-level').textContent = `⭐ Lv ${state.floors}`;
+  $('btn-build').classList.toggle('ready', state.coins >= floorCost());
+}
+
+let toastTimer = null;
+function toast(html, ms = 3200) {
+  toastEl.innerHTML = html;
+  toastEl.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.add('hidden'), ms);
+}
+
+function floatCoins(n) {
+  const el = document.createElement('div');
+  el.className = 'float-coins';
+  el.textContent = `+${n} 🪙`;
+  worldEl.appendChild(el);
+  setTimeout(() => el.remove(), 1300);
+}
+
+// ── Sums ──
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+function nextSum() {
+  // A sum the player got wrong comes back after a couple of guests.
+  retry.forEach(r => r.wait--);
+  const due = retry.findIndex(r => r.wait <= 0);
+  if (due >= 0) return retry.splice(due, 1)[0];
+
+  const info = levelInfo(state.floors);
+  const prev = levelInfo(Math.max(1, state.floors - 1));
+  const fresh = info.tables.filter(t => !prev.tables.includes(t));
+  // Practise the newest tables more often.
+  const table = fresh.length && Math.random() < 0.5 ? pick(fresh) : pick(info.tables);
+  const other = 1 + Math.floor(Math.random() * 10);
+  return Math.random() < 0.5 ? { a: table, b: other } : { a: other, b: table };
+}
+
+function makeChoices(a, b) {
+  const answer = a * b;
+  const options = new Set([answer]);
+  const near = shuffle([(a + 1) * b, (a - 1) * b, a * (b + 1), a * (b - 1),
+                        answer + 1, answer - 1, answer + 10, answer - 10, a + b]);
+  for (const n of near) {
+    if (options.size >= 4) break;
+    if (n > 0 && n <= 110) options.add(n);
+  }
+  while (options.size < 4) options.add(1 + Math.floor(Math.random() * 100));
+  return shuffle([...options]);
+}
+
+// ── A guest at the desk ──
+function nextGuest() {
+  const { a, b } = nextSum();
+  const guest = pick(GUESTS);
+  current = { a, b, guest };
+  typed = '';
+  const info = levelInfo(state.floors);
+
+  guestEl.className = '';
+  guestEl.textContent = guest[0];
+  void guestEl.offsetWidth;
+  guestEl.classList.add('arrive');
+  playBell();
+
+  storyFace.textContent = guest[0];
+  storyText.textContent = pick(STORIES)(a, b, guest);
+  feedbackEl.textContent = '';
+  feedbackEl.className = '';
+  drawQuestion();
+
+  answersEl.innerHTML = '';
+  if (info.mode === 'choice') {
+    answersEl.className = '';
+    makeChoices(a, b).forEach((value, i) => {
+      const btn = makeButton(`<span class="key">${i + 1}</span>${value}`, () => answer(value, btn));
+      btn.dataset.value = value;
+    });
+  } else {
+    answersEl.className = 'pad';
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 0].forEach(d => makeButton(d, () => typeDigit(d)));
+    makeButton('⌫', backspace).classList.add('del');
+    makeButton('✓', submitTyped).classList.add('ok');
+  }
+
+  locked = false;
+  startTimer(info.time);
+}
+
+function makeButton(html, onClick) {
+  const btn = document.createElement('button');
+  btn.className = 'ans';
+  btn.innerHTML = html;
+  btn.onclick = onClick;
+  answersEl.appendChild(btn);
+  return btn;
+}
+
+function drawQuestion(shown) {
+  const { a, b } = current;
+  let right;
+  if (shown !== undefined) right = `<span class="q">${shown}</span>`;
+  else if (levelInfo(state.floors).mode === 'type') right = `<span class="typed">${typed || '&nbsp;'}</span>`;
+  else right = '<span class="q">?</span>';
+  questionEl.innerHTML = `${a} × ${b} = ${right}`;
+}
+
+function typeDigit(d) {
+  if (locked || typed.length >= 3) return;
+  typed = typed === '0' ? String(d) : typed + d;
+  drawQuestion();
+}
+function backspace() {
+  if (locked) return;
+  typed = typed.slice(0, -1);
+  drawQuestion();
+}
+function submitTyped() {
+  if (locked || typed === '') return;
+  answer(Number(typed));
+}
+
+// ── Patience timer ──
+function startTimer(seconds) {
+  clearInterval(timerId);
+  patienceEl.classList.toggle('on', seconds > 0);
+  if (!seconds) return;
+  current.time = seconds;
+  timeLeft = seconds;
+  drawTimer();
+  timerId = setInterval(() => {
+    if (!screenShop.classList.contains('hidden')) return;   // paused while building
+    timeLeft -= 0.1;
+    drawTimer();
+    if (timeLeft <= 0) { clearInterval(timerId); answer(null); }
+  }, 100);
+}
+function drawTimer() {
+  const frac = Math.max(0, timeLeft / current.time);
+  patienceBar.style.width = (frac * 100) + '%';
+  patienceBar.style.background = frac > 0.5 ? '#69db7c' : frac > 0.25 ? '#ffd43b' : '#ff6b6b';
+}
+
+function answer(value, btn) {
+  if (locked) return;
+  locked = true;
+  clearInterval(timerId);
+  const { a, b, guest } = current;
+  const correct = a * b;
+  [...answersEl.children].forEach(x => x.disabled = true);
+
+  if (value === correct) {
+    streak++;
+    let earned = 10 + state.upgrades.length * 2;
+    const fast = current.time && timeLeft > current.time / 2;
+    if (fast) earned += 5;
+    if (streak >= 3) earned += 5;
+    state.coins += earned;
+    state.served++;
+    btn && btn.classList.add('right');
+    playRight();
+    drawQuestion(correct);
+    feedbackEl.textContent = pick(CHEERS) + (fast ? ' ⚡ Fast!' : '') + (streak >= 3 ? ` 🔥 ${streak} in a row` : '');
+    feedbackEl.className = 'good';
+    floatCoins(earned);
+    pandaEl.classList.remove('happy');
+    void pandaEl.offsetWidth;
+    pandaEl.classList.add('happy');
+    guestEl.classList.add('checkin');
+    checkIn(guest[0]);
+    save();
+    updateHud();
+    setTimeout(nextGuest, 1500);
+  } else {
+    streak = 0;
+    retry.push({ a, b, wait: 2 });
+    btn && btn.classList.add('wrong');
+    [...answersEl.children].forEach(x => { if (Number(x.dataset.value) === correct) x.classList.add('right'); });
+    playWrong();
+    drawQuestion(correct);
+    feedbackEl.textContent = value === null
+      ? `Too slow! The guest left. ${a} × ${b} = ${correct}`
+      : `Oops! ${a} × ${b} = ${correct}. The guest went to another hotel.`;
+    feedbackEl.className = 'bad';
+    guestEl.classList.add('leave');
+    setTimeout(nextGuest, 2600);
+  }
+}
+
+function checkIn(emoji) {
+  const total = totalRooms();
+  let free = [];
+  for (let i = 0; i < total; i++) if (!state.rooms[i]) free.push(i);
+  if (!free.length) {
+    // Hotel full: the guest who has stayed longest checks out first.
+    const out = Math.floor(Math.random() * total);
+    free = [out];
+    if (state.served % 3 === 0) toast('Your hotel is <b>full</b>! Build a new floor for more rooms 🔨');
+  }
+  const idx = pick(free);
+  state.rooms[idx] = emoji;
+  const room = $('room-' + idx);
+  if (room) {
+    room.textContent = emoji;
+    room.classList.add('busy');
+    room.classList.remove('new');
+    void room.offsetWidth;
+    room.classList.add('new');
+  }
+}
+
+// ── Build shop ──
+function floorCost() { return 40 + (state.floors - 1) * 25; }
+
+function openShop() {
+  if (!screenStart.classList.contains('hidden')) return;
+  renderShop();
+  screenShop.classList.remove('hidden');
+}
+
+function renderShop() {
+  $('shop-coins').textContent = `You have 🪙 ${state.coins} coins`;
+  const list = $('shop-list');
+  list.innerHTML = '';
+  const next = levelInfo(state.floors + 1);
+  const cur = levelInfo(state.floors);
+  const newTables = next.tables.filter(t => !cur.tables.includes(t));
+  let hint = `+${ROOMS_PER_FLOOR} rooms · level ${state.floors + 1}`;
+  if (newTables.length) hint += ` · new: table of ${newTables.join(' & ')}`;
+  addShopItem('🏢', `New floor ${state.floors + 1}`, hint, floorCost(), false, buildFloor);
+  for (const u of UPGRADES) {
+    const owned = state.upgrades.includes(u.id);
+    addShopItem(u.icon, u.name, owned ? 'Built ✔' : '+2 🪙 from every guest · +1 hotel star', u.cost, owned, () => buyUpgrade(u));
+  }
+}
+
+function addShopItem(icon, name, hint, cost, owned, onBuy) {
+  const row = document.createElement('div');
+  row.className = 'shop-item' + (owned ? ' owned' : '');
+  row.innerHTML = `<span class="icon">${icon}</span><span class="info">${name}<small>${hint}</small></span>`;
+  const btn = document.createElement('button');
+  btn.textContent = owned ? '✔' : `🪙 ${cost}`;
+  btn.disabled = owned || state.coins < cost;
+  btn.onclick = () => { state.coins -= cost; onBuy(); save(); updateHud(); renderShop(); playBuild(); };
+  row.appendChild(btn);
+  $('shop-list').appendChild(row);
+}
+
+function buildFloor() {
+  addFloorEl(state.floors, true);
+  state.floors++;
+  placeCamera();
+  const info = levelInfo(state.floors);
+  const prev = levelInfo(state.floors - 1);
+  const parts = [`<b>Level ${state.floors}!</b> Your hotel has ${totalRooms()} rooms now.`];
+  const fresh = info.tables.filter(t => !prev.tables.includes(t));
+  if (fresh.length) parts.push(`New guests bring the <b>table of ${fresh.join(' & ')}</b>.`);
+  if (info.time && !prev.time) parts.push(`Guests are busy now: answer before they lose <b>patience</b> ⏱️`);
+  else if (info.time && info.time < prev.time) parts.push(`Guests wait only <b>${info.time} seconds</b> now ⏱️`);
+  if (info.mode === 'type' && prev.mode === 'choice') parts.push(`No more choices: <b>type the answer</b> yourself ⌨️`);
+  pendingToast = parts.join('<br>');
+}
+let pendingToast = null;
+
+function buyUpgrade(u) {
+  state.upgrades.push(u.id);
+  drawHotel();
+}
+
+function closeShop() {
+  screenShop.classList.add('hidden');
+  if (pendingToast) {
+    toast(pendingToast, 5000);
+    // A new level changes how guests are served, so call a fresh guest.
+    pendingToast = null;
+    if (!locked) { locked = true; clearInterval(timerId); setTimeout(nextGuest, 300); }
+  }
+}
+
+// ── Game flow ──
+function startGame(fresh) {
+  if (!audio) {
+    try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch {}
+  }
+  if (fresh) { state = freshState(); save(); }
+  screenStart.classList.add('hidden');
+  drawHotel();
+  toast(state.served
+    ? `Welcome back, manager! <b>${state.served}</b> guests served so far 🐼`
+    : 'Welcome, manager! Answer the guests\' sums to earn <b>coins</b> 🪙', 3500);
+  nextGuest();
+}
+
+// ── Input ──
+document.addEventListener('keydown', e => {
+  if (!screenStart.classList.contains('hidden')) return;
+  if (!screenShop.classList.contains('hidden')) { if (e.key === 'Escape') closeShop(); return; }
+  if (locked) return;
+  if (levelInfo(state.floors).mode === 'choice') {
+    const n = Number(e.key);
+    if (n >= 1 && n <= 4 && answersEl.children[n - 1]) answersEl.children[n - 1].click();
+  } else if (/^[0-9]$/.test(e.key)) typeDigit(Number(e.key));
+  else if (e.key === 'Backspace') backspace();
+  else if (e.key === 'Enter') submitTyped();
+});
+$('btn-build').onclick = openShop;
+$('btn-close-shop').onclick = closeShop;
+$('btn-play').onclick = () => startGame(false);
+$('btn-reset').onclick = () => startGame(true);
+window.addEventListener('resize', placeCamera);
+
+const saved = load();
+if (saved) {
+  state = saved;
+  $('btn-play').textContent = '🛎️ Back to my hotel';
+  $('btn-reset').hidden = false;
+}
+buildSkyline();
+drawHotel();
+</script>
+</body>
+</html>
