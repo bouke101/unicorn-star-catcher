@@ -41,7 +41,7 @@
       padding: 10px 12px;
       background: rgba(255,255,255,0.82);
       z-index: 10;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: bold;
       color: #1b2a4a;
     }
@@ -450,7 +450,54 @@
       box-shadow: none;
       cursor: default;
     }
-    .shop-item.owned { opacity: 0.55; }
+    .shop-item.owned .info { color: #ffd43b; }
+
+    /* ── Mini-games ── */
+    #mini {
+      position: absolute;
+      inset: 0;
+      z-index: 30;
+      background: #1b2a4a;
+    }
+    #mini.hidden { display: none; }
+    #mini-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    #btn-mini-quit {
+      position: absolute;
+      top: 8px; right: 8px;
+      width: 32px; height: 32px;
+      border: none;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+      z-index: 2;
+    }
+    #mini-card {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 24px 22px;
+      background: rgba(13, 27, 61, 0.94);
+      color: #fff;
+      text-align: center;
+      overflow-y: auto;
+    }
+    #mini-card.hidden { display: none; }
+    #mini-card h2 { font-size: 30px; color: #ffd43b; }
+    #mini-card p { color: #dde; font-size: 16px; line-height: 1.5; max-width: 380px; }
+    #mini-card .controls { background: rgba(255,255,255,0.1); border-radius: 12px; padding: 8px 12px; }
+    #mini-card .small { font-size: 13px; color: #aab; }
+    #mini-card .reward { font-size: 30px; font-weight: bold; color: #ffd43b; }
   </style>
 </head>
 <body>
@@ -460,6 +507,7 @@
     <span class="stat" id="hud-coins">🪙 0</span>
     <span class="stat" id="hud-rooms">🛏️ 0/4</span>
     <span class="stat" id="hud-level">⭐ Lv 1</span>
+    <span class="stat" id="hud-tickets">🎟️ 0</span>
     <button id="btn-build">🔨 Build</button>
   </div>
 
@@ -505,6 +553,13 @@
     <div id="shop-list"></div>
     <button class="btn alt small" id="btn-close-shop">Back to the desk</button>
   </div>
+
+  <!-- Mini-games -->
+  <div id="mini" class="hidden">
+    <canvas id="mini-canvas"></canvas>
+    <button id="btn-mini-quit" aria-label="Stop the game">✖</button>
+    <div id="mini-card" class="hidden"></div>
+  </div>
 </div>
 
 <script>
@@ -513,6 +568,7 @@ const FLOOR_H = 42;
 const LOBBY_H = 66;
 const GROUND_H = 46;
 const SAVE_KEY = 'panda-hotel-save';
+const TICKET_EVERY = 5;     // guests served per mini-game ticket
 
 // Each level is unlocked by building a floor. Later levels add harder
 // tables, a patience timer, and typing the answer instead of choosing it.
@@ -584,7 +640,7 @@ let timeLeft = 0;
 let timerId = null;
 
 function freshState() {
-  return { coins: 0, floors: 1, served: 0, upgrades: [], rooms: [] };
+  return { coins: 0, floors: 1, served: 0, upgrades: [], rooms: [], tickets: 0, best: {} };
 }
 
 // ── Saving ──
@@ -701,6 +757,7 @@ function updateHud() {
   $('hud-coins').textContent = `🪙 ${state.coins}`;
   $('hud-rooms').textContent = `🛏️ ${busy}/${totalRooms()}`;
   $('hud-level').textContent = `⭐ Lv ${state.floors}`;
+  $('hud-tickets').textContent = `🎟️ ${state.tickets}`;
   $('btn-build').classList.toggle('ready', state.coins >= floorCost());
 }
 
@@ -838,7 +895,7 @@ function startTimer(seconds) {
   timeLeft = seconds;
   drawTimer();
   timerId = setInterval(() => {
-    if (!screenShop.classList.contains('hidden')) return;   // paused while building
+    if (!screenShop.classList.contains('hidden') || miniOpen()) return;   // paused while building or playing
     timeLeft -= 0.1;
     drawTimer();
     if (timeLeft <= 0) { clearInterval(timerId); answer(null); }
@@ -877,6 +934,10 @@ function answer(value, btn) {
     pandaEl.classList.add('happy');
     guestEl.classList.add('checkin');
     checkIn(guest[0]);
+    if (state.served % TICKET_EVERY === 0) {
+      state.tickets++;
+      toast(`You earned a <b>game ticket</b> 🎟️! Use it in 🔨 Build to play a hotel game again.`);
+    }
     save();
     updateHud();
     setTimeout(nextGuest, 1500);
@@ -936,21 +997,31 @@ function renderShop() {
   const newTables = next.tables.filter(t => !cur.tables.includes(t));
   let hint = `+${ROOMS_PER_FLOOR} rooms · level ${state.floors + 1}`;
   if (newTables.length) hint += ` · new: table of ${newTables.join(' & ')}`;
-  addShopItem('🏢', `New floor ${state.floors + 1}`, hint, floorCost(), false, buildFloor);
+  addShopItem('🏢', `New floor ${state.floors + 1}`, hint, `🪙 ${floorCost()}`, state.coins >= floorCost(), () => {
+    state.coins -= floorCost();
+    buildFloor();
+    playBuild();
+  });
   for (const u of UPGRADES) {
-    const owned = state.upgrades.includes(u.id);
-    addShopItem(u.icon, u.name, owned ? 'Built ✔' : '+2 🪙 from every guest · +1 hotel star', u.cost, owned, () => buyUpgrade(u));
+    const game = MINI_GAMES[u.id];
+    if (state.upgrades.includes(u.id)) {
+      addShopItem(u.icon, `${u.name} ✔`, `Play ${game.title} ${game.icon} for 1 🎟️ (you have ${state.tickets})`,
+                  '▶ 🎟️', state.tickets > 0, () => { state.tickets--; openMini(u.id, false); });
+    } else {
+      addShopItem(u.icon, u.name, `Unlocks the ${game.title} game · +2 🪙 per guest`,
+                  `🪙 ${u.cost}`, state.coins >= u.cost, () => { state.coins -= u.cost; buyUpgrade(u); playBuild(); });
+    }
   }
 }
 
-function addShopItem(icon, name, hint, cost, owned, onBuy) {
+function addShopItem(icon, name, hint, label, enabled, onClick) {
   const row = document.createElement('div');
-  row.className = 'shop-item' + (owned ? ' owned' : '');
+  row.className = 'shop-item' + (label.startsWith('▶') ? ' owned' : '');
   row.innerHTML = `<span class="icon">${icon}</span><span class="info">${name}<small>${hint}</small></span>`;
   const btn = document.createElement('button');
-  btn.textContent = owned ? '✔' : `🪙 ${cost}`;
-  btn.disabled = owned || state.coins < cost;
-  btn.onclick = () => { state.coins -= cost; onBuy(); save(); updateHud(); renderShop(); playBuild(); };
+  btn.textContent = label;
+  btn.disabled = !enabled;
+  btn.onclick = () => { onClick(); save(); updateHud(); renderShop(); };
   row.appendChild(btn);
   $('shop-list').appendChild(row);
 }
@@ -974,6 +1045,7 @@ let pendingToast = null;
 function buyUpgrade(u) {
   state.upgrades.push(u.id);
   drawHotel();
+  openMini(u.id, true);
 }
 
 function closeShop() {
@@ -1002,7 +1074,7 @@ function startGame(fresh) {
 
 // ── Input ──
 document.addEventListener('keydown', e => {
-  if (!screenStart.classList.contains('hidden')) return;
+  if (!screenStart.classList.contains('hidden') || miniOpen()) return;
   if (!screenShop.classList.contains('hidden')) { if (e.key === 'Escape') closeShop(); return; }
   if (locked) return;
   if (levelInfo(state.floors).mode === 'choice') {
@@ -1027,5 +1099,6 @@ if (saved) {
 buildSkyline();
 drawHotel();
 </script>
+<script src="minigames.js"></script>
 </body>
 </html>
